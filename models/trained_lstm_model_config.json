@@ -1,0 +1,6 @@
+{
+  "epochs": 50,
+  "batch_size": 32,
+  "validation_data": "validation data present",
+  "verbose": 0
+}
