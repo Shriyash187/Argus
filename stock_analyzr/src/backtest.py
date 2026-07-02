@@ -104,13 +104,18 @@ class WalkForwardBacktester:
                 print(f"Skipping window {len(window_results) + 1}: insufficient data")
                 continue
             
+            # Isolate preprocessing per fold to prevent state pollution
+            fold_preprocessor = DataPreprocessor(scaler_type=self.preprocessor.scaler_type)
+            fold_preprocessor.feature_columns = self.preprocessor.feature_columns
+            fold_preprocessor.target_column = self.preprocessor.target_column
+            
             # Scale features (fit on training, transform test)
-            X_train_scaled, X_test_scaled = self.preprocessor.scale_features(
+            X_train_scaled, X_test_scaled = fold_preprocessor.scale_features(
                 X_train, X_test, fit_scaler=True
             )
             
             # Scale targets
-            y_train_scaled, y_test_scaled = self.preprocessor.scale_targets(
+            y_train_scaled, y_test_scaled = fold_preprocessor.scale_targets(
                 y_train, y_test, fit_scaler=True
             )
             
@@ -131,8 +136,8 @@ class WalkForwardBacktester:
             # Make predictions
             y_pred_scaled = window_model.predict(X_test_scaled)
             
-            # Inverse transform predictions
-            y_pred = self.preprocessor.inverse_transform_targets(y_pred_scaled)
+            # Inverse transform predictions using the fold-specific preprocessor
+            y_pred = fold_preprocessor.inverse_transform_targets(y_pred_scaled)
             
             # Calculate metrics for this window
             window_metrics = self._calculate_metrics(y_test, y_pred)

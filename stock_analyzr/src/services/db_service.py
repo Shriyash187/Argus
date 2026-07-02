@@ -1,4 +1,5 @@
 import os
+import json
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from sqlalchemy import (
@@ -125,6 +126,52 @@ class SystemLog(Base):
     level = Column(String, nullable=False)
     module = Column(String, nullable=False)
     message = Column(Text, nullable=False)
+
+
+class PortfolioState(Base):
+    """Virtual cash and portfolio state for Paper Trading."""
+    __tablename__ = 'portfolio_state'
+    
+    id = Column(Integer, primary_key=True)
+    cash = Column(Float, nullable=False, default=100000.0)
+    initial_capital = Column(Float, nullable=False, default=100000.0)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Holding(Base):
+    """Current stock holdings for Paper Trading."""
+    __tablename__ = 'holdings'
+    
+    ticker = Column(String, primary_key=True, index=True)
+    shares = Column(Float, nullable=False, default=0.0)
+    avg_purchase_price = Column(Float, nullable=False, default=0.0)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Transaction(Base):
+    """Transaction history for Paper Trading."""
+    __tablename__ = 'transactions'
+    
+    id = Column(Integer, primary_key=True)
+    ticker = Column(String, nullable=False, index=True)
+    action = Column(String, nullable=False)  # 'BUY' or 'SELL'
+    shares = Column(Float, nullable=False)
+    price = Column(Float, nullable=False)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+
+
+class ModelRecord(Base):
+    """Model registry database entries for tracking versioned ML models."""
+    __tablename__ = 'model_registry'
+    
+    id = Column(Integer, primary_key=True)
+    ticker = Column(String, nullable=False, index=True)
+    model_type = Column(String, nullable=False)
+    version = Column(Integer, nullable=False)
+    filepath = Column(String, nullable=False)
+    metrics_json = Column(Text, nullable=False)  # JSON-serialized dictionary of performance metrics
+    is_active = Column(Integer, default=0)  # 1 if active, 0 otherwise (SQLite compatible boolean)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class DatabaseService:
@@ -486,6 +533,296 @@ class DatabaseService:
         session = self.SessionLocal()
         try:
             return session.query(Event).filter(Event.ticker == ticker).order_by(Event.date.desc()).limit(limit).all()
+        finally:
+            session.close()
+
+    # --- Portfolio and Paper Trading Operations ---
+    def get_portfolio_state(self) -> Dict[str, float]:
+        """Retrieve portfolio balance, initializing it if empty."""
+        session = self.SessionLocal()
+        try:
+            state = session.query(PortfolioState).first()
+            if not state:
+                state = PortfolioState(cash=100000.0, initial_capital=100000.0)
+                session.add(state)
+                session.commit()
+                session.refresh(state)
+            return {
+                "cash": state.cash,
+                "initial_capital": state.initial_capital
+            }
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Error getting portfolio state: {e}")
+            return {"cash": 100000.0, "initial_capital": 100000.0}
+        finally:
+            session.close()
+
+    def update_portfolio_cash(self, cash_change: float) -> bool:
+        """Update virtual cash balance."""
+        session = self.SessionLocal()
+        try:
+            state = session.query(PortfolioState).first()
+            if not state:
+                state = PortfolioState(cash=100000.0, initial_capital=100000.0)
+                session.add(state)
+            state.cash += cash_change
+            session.commit()
+            return True
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Error updating cash: {e}")
+            return False
+        finally:
+            session.close()
+
+    def reset_portfolio(self, initial_capital: float = 100000.0) -> bool:
+        """Reset portfolio state, deleting all holdings and transactions."""
+        session = self.SessionLocal()
+        try:
+            # Delete holdings and transactions
+            session.query(Holding).delete()
+            session.query(Transaction).delete()
+            
+            # Reset state
+            state = session.query(PortfolioState).first()
+            if not state:
+                state = PortfolioState()
+                session.add(state)
+            state.cash = initial_capital
+            state.initial_capital = initial_capital
+            
+            session.commit()
+            logger.info(f"Portfolio reset to {initial_capital}")
+            return True
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Error resetting portfolio: {e}")
+            return False
+        finally:
+            session.close()
+
+    def get_holdings(self) -> List[Dict[str, Any]]:
+        """Retrieve all holdings."""
+        session = self.SessionLocal()
+        try:
+            holdings = session.query(Holding).all()
+            return [
+                {
+                    "ticker": h.ticker,
+                    "shares": h.shares,
+                    "avg_purchase_price": h.avg_purchase_price
+                }
+                for h in holdings
+            ]
+        finally:
+            session.close()
+
+    def get_holding(self, ticker: str) -> Optional[Dict[str, Any]]:
+        """Retrieve a specific holding."""
+        session = self.SessionLocal()
+        try:
+            h = session.query(Holding).filter(Holding.ticker == ticker).first()
+            if h:
+                return {
+                    "ticker": h.ticker,
+                    "shares": h.shares,
+                    "avg_purchase_price": h.avg_purchase_price
+                }
+            return None
+        finally:
+            session.close()
+
+    def update_holding(self, ticker: str, shares: float, price: float, action: str) -> bool:
+        """Update holding details based on a BUY or SELL action."""
+        session = self.SessionLocal()
+        try:
+            holding = session.query(Holding).filter(Holding.ticker == ticker).first()
+            if action == 'BUY':
+                if not holding:
+                    holding = Holding(ticker=ticker, shares=shares, avg_purchase_price=price)
+                    session.add(holding)
+                else:
+                    new_shares = holding.shares + shares
+                    new_avg = ((holding.shares * holding.avg_purchase_price) + (shares * price)) / new_shares
+                    holding.shares = new_shares
+                    holding.avg_purchase_price = new_avg
+            elif action == 'SELL':
+                if not holding or holding.shares < shares:
+                    logger.warning(f"Attempted to sell {shares} shares of {ticker} but only hold {holding.shares if holding else 0}")
+                    return False
+                holding.shares -= shares
+                if holding.shares <= 0.0001:
+                    session.delete(holding)
+            session.commit()
+            return True
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Error updating holding: {e}")
+            return False
+        finally:
+            session.close()
+
+    def record_transaction(self, ticker: str, action: str, shares: float, price: float) -> bool:
+        """Record transaction history."""
+        session = self.SessionLocal()
+        try:
+            tx = Transaction(ticker=ticker, action=action, shares=shares, price=price)
+            session.add(tx)
+            session.commit()
+            return True
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Error recording transaction: {e}")
+            return False
+        finally:
+            session.close()
+
+    def get_transactions(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """Retrieve transaction history."""
+        session = self.SessionLocal()
+        try:
+            txs = session.query(Transaction).order_by(Transaction.timestamp.desc()).limit(limit).all()
+            return [
+                {
+                    "id": tx.id,
+                    "ticker": tx.ticker,
+                    "action": tx.action,
+                    "shares": tx.shares,
+                    "price": tx.price,
+                    "timestamp": tx.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+                }
+                for tx in txs
+            ]
+        finally:
+            session.close()
+
+    # --- Model Registry Operations ---
+    def register_model(self, ticker: str, model_type: str, filepath: str, metrics: Dict[str, float]) -> int:
+        """Register a trained model, set it as active, and deactivate other models for this ticker."""
+        session = self.SessionLocal()
+        try:
+            # Determine next version number
+            latest = session.query(ModelRecord).filter(ModelRecord.ticker == ticker).order_by(ModelRecord.version.desc()).first()
+            version = (latest.version + 1) if latest else 1
+            
+            # Deactivate current active models for this ticker
+            session.query(ModelRecord).filter(
+                ModelRecord.ticker == ticker,
+                ModelRecord.is_active == 1
+            ).update({"is_active": 0})
+            
+            # Create new record
+            record = ModelRecord(
+                ticker=ticker,
+                model_type=model_type,
+                version=version,
+                filepath=filepath,
+                metrics_json=json.dumps(metrics),
+                is_active=1
+            )
+            session.add(record)
+            session.commit()
+            logger.info(f"Registered model {model_type} v{version} for {ticker}")
+            return version
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Error registering model: {e}")
+            raise e
+        finally:
+            session.close()
+
+    def get_active_model(self, ticker: str) -> Optional[Dict[str, Any]]:
+        """Retrieve the active model for a ticker."""
+        session = self.SessionLocal()
+        try:
+            record = session.query(ModelRecord).filter(
+                ModelRecord.ticker == ticker,
+                ModelRecord.is_active == 1
+            ).first()
+            if record:
+                return {
+                    "id": record.id,
+                    "ticker": record.ticker,
+                    "model_type": record.model_type,
+                    "version": record.version,
+                    "filepath": record.filepath,
+                    "metrics": json.loads(record.metrics_json),
+                    "created_at": record.created_at.strftime("%Y-%m-%d %H:%M:%S")
+                }
+            return None
+        finally:
+            session.close()
+
+    def get_model_by_version(self, ticker: str, version: int) -> Optional[Dict[str, Any]]:
+        """Retrieve a specific model version."""
+        session = self.SessionLocal()
+        try:
+            record = session.query(ModelRecord).filter(
+                ModelRecord.ticker == ticker,
+                ModelRecord.version == version
+            ).first()
+            if record:
+                return {
+                    "id": record.id,
+                    "ticker": record.ticker,
+                    "model_type": record.model_type,
+                    "version": record.version,
+                    "filepath": record.filepath,
+                    "metrics": json.loads(record.metrics_json),
+                    "created_at": record.created_at.strftime("%Y-%m-%d %H:%M:%S")
+                }
+            return None
+        finally:
+            session.close()
+
+    def list_models(self, ticker: str) -> List[Dict[str, Any]]:
+        """List all registered models for a ticker."""
+        session = self.SessionLocal()
+        try:
+            records = session.query(ModelRecord).filter(ModelRecord.ticker == ticker).order_by(ModelRecord.version.desc()).all()
+            return [
+                {
+                    "id": r.id,
+                    "ticker": r.ticker,
+                    "model_type": r.model_type,
+                    "version": r.version,
+                    "filepath": r.filepath,
+                    "metrics": json.loads(r.metrics_json),
+                    "is_active": bool(r.is_active),
+                    "created_at": r.created_at.strftime("%Y-%m-%d %H:%M:%S")
+                }
+                for r in records
+            ]
+        finally:
+            session.close()
+
+    def set_active_model(self, ticker: str, version: int) -> bool:
+        """Set a specific model version as active for a ticker."""
+        session = self.SessionLocal()
+        try:
+            # Check if model exists
+            model = session.query(ModelRecord).filter(
+                ModelRecord.ticker == ticker,
+                ModelRecord.version == version
+            ).first()
+            if not model:
+                return False
+            
+            # Deactivate all
+            session.query(ModelRecord).filter(
+                ModelRecord.ticker == ticker,
+                ModelRecord.is_active == 1
+            ).update({"is_active": 0})
+            
+            # Activate this one
+            model.is_active = 1
+            session.commit()
+            return True
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Error setting active model: {e}")
+            return False
         finally:
             session.close()
 

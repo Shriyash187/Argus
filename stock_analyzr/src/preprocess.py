@@ -156,19 +156,20 @@ class DataPreprocessor:
         Returns:
             Tuple of scaled features
         """
-        if self.scaler_type == 'minmax':
-            scaler = MinMaxScaler()
-        else:
-            scaler = StandardScaler()
-        
-        # Reshape for scaling
-        n_seq, seq_len, n_feat = X_train.shape
-        X_train_flat = X_train.reshape(-1, n_feat)
-        
-        if fit_scaler:
+        if fit_scaler or self.feature_scaler is None:
+            if self.scaler_type == 'minmax':
+                scaler = MinMaxScaler()
+            else:
+                scaler = StandardScaler()
             self.feature_scaler = scaler
+            
+            n_seq, seq_len, n_feat = X_train.shape
+            X_train_flat = X_train.reshape(-1, n_feat)
             X_train_scaled = scaler.fit_transform(X_train_flat)
         else:
+            scaler = self.feature_scaler
+            n_seq, seq_len, n_feat = X_train.shape
+            X_train_flat = X_train.reshape(-1, n_feat)
             X_train_scaled = scaler.transform(X_train_flat)
         
         X_train_scaled = X_train_scaled.reshape(n_seq, seq_len, n_feat)
@@ -205,17 +206,18 @@ class DataPreprocessor:
         Returns:
             Tuple of scaled targets
         """
-        if self.scaler_type == 'minmax':
-            scaler = MinMaxScaler()
-        else:
-            scaler = StandardScaler()
-        
-        y_train_reshaped = y_train.reshape(-1, 1)
-        
-        if fit_scaler:
+        if fit_scaler or self.target_scaler is None:
+            if self.scaler_type == 'minmax':
+                scaler = MinMaxScaler()
+            else:
+                scaler = StandardScaler()
             self.target_scaler = scaler
+            
+            y_train_reshaped = y_train.reshape(-1, 1)
             y_train_scaled = scaler.fit_transform(y_train_reshaped).ravel()
         else:
+            scaler = self.target_scaler
+            y_train_reshaped = y_train.reshape(-1, 1)
             y_train_scaled = scaler.transform(y_train_reshaped).ravel()
         
         result = [y_train_scaled]
@@ -371,6 +373,9 @@ class DataPreprocessor:
         df_processed = self.prepare_features(df, target_col=target_col)
         df_processed = self.add_technical_features(df_processed)
         
+        # Update feature columns metadata to include generated indicators
+        self.feature_columns = [col for col in df_processed.columns if col != self.target_column]
+        
         # Convert to numpy array
         data_array = df_processed.values
         
@@ -415,6 +420,65 @@ class DataPreprocessor:
             'scaler_type': self.scaler_type,
             'preprocessor': self
         }
+
+    def prepare_inference_data(self, df: pd.DataFrame, sequence_length: int = 30) -> np.ndarray:
+        """
+        Prepare features for real-time inference (no fitting, no splits).
+        
+        Args:
+            df: Input DataFrame containing the latest prices and indicators.
+                Must have length >= sequence_length.
+            sequence_length: Lookback sequence length.
+            
+        Returns:
+            Scaled numpy array of shape (1, sequence_length, n_features) ready for model prediction.
+        """
+        df_processed = df.copy()
+        
+        # Flatten multi-level columns if they exist
+        if isinstance(df_processed.columns, pd.MultiIndex):
+            df_processed.columns = [col[0] if col[1] == '' else f"{col[0]}_{col[1]}" for col in df_processed.columns]
+            
+        if 'Date' in df_processed.columns:
+            df_processed['Date'] = pd.to_datetime(df_processed['Date'])
+            df_processed.set_index('Date', inplace=True)
+            
+        # Select target column (Close) and feature columns
+        available_feature_cols = []
+        base_cols = ['Close', 'Open', 'High', 'Low', 'Volume']
+        indicator_cols = ['RSI', 'EMA_20', 'MACD', 'MACD_HIST', 'MACD_SIGNAL', 'SMA_50']
+        
+        for col in base_cols + indicator_cols:
+            if col in df_processed.columns:
+                available_feature_cols.append(col)
+            else:
+                # Check for flattened versions
+                flattened_cols = [c for c in df_processed.columns if c.startswith(col + '_')]
+                if flattened_cols:
+                    available_feature_cols.extend(flattened_cols)
+                    
+        df_processed = df_processed[available_feature_cols]
+        df_processed = df_processed.ffill().bfill().dropna()
+        
+        # Add technical features
+        df_processed = self.add_technical_features(df_processed)
+        
+        # Ensure we keep the exact columns that the model expects (target_column + feature_columns)
+        ordered_cols = [self.target_column] + self.feature_columns
+        
+        # Filter and take the last sequence_length rows
+        df_latest = df_processed[ordered_cols].tail(sequence_length)
+        
+        # Convert to numpy
+        data_latest = df_latest.values
+        
+        # Reshape to (1, sequence_length, n_features)
+        X = np.expand_dims(data_latest, axis=0)
+        
+        # Scale features using the fitted scaler
+        X_scaled = self.scale_features(X, fit_scaler=False)[0]
+        
+        return X_scaled
 
 
 def demonstrate_queue_vs_traditional(data: np.ndarray, sequence_length: int = 60) -> Dict[str, Any]:

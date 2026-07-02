@@ -275,7 +275,7 @@ def run_backtesting(model, preprocessor, data):
         overall_metrics = results['overall_metrics']
         print("\n📊 Overall Backtesting Results:")
         print(f"  RMSE: {overall_metrics['rmse']:.4f}")
-        print(f"  MAPE: {overall_metrics['mape']:.2f}%")
+        print(f"  MAPE: {overall_metrics['mape']:.2%}")
         print(f"  Directional Accuracy: {overall_metrics['directional_accuracy']:.2%}")
         print(f"  Max Error: {overall_metrics['max_error']:.4f}")
         

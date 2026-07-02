@@ -91,16 +91,39 @@ class YahooService:
                 
             parsed_articles = []
             for item in raw_news:
-                # Convert epoch timestamp to datetime
+                content = item.get("content", {})
+                
+                title = content.get("title", item.get("title", "No Title"))
+                summary = content.get("summary", item.get("summary", content.get("description", item.get("description", ""))))
+                if not summary:
+                    summary = title
+                
+                publisher = item.get("publisher", "Yahoo Finance")
+                if isinstance(publisher, dict):
+                    publisher = publisher.get("displayName", "Yahoo Finance")
+                elif "provider" in item and isinstance(item["provider"], dict):
+                    publisher = item["provider"].get("displayName", "Yahoo Finance")
+                
+                link = ""
+                if "canonicalUrl" in content and isinstance(content["canonicalUrl"], dict):
+                    link = content["canonicalUrl"].get("url", "")
+                if not link:
+                    link = item.get("link", "")
+                
                 pub_time = datetime.utcnow()
-                if 'providerPublishTime' in item:
+                if "pubDate" in content:
+                    try:
+                        pub_time = datetime.strptime(content["pubDate"][:19], "%Y-%m-%dT%H:%M:%S")
+                    except ValueError:
+                        pass
+                elif 'providerPublishTime' in item:
                     pub_time = datetime.utcfromtimestamp(item['providerPublishTime'])
                 
                 parsed_articles.append({
-                    "headline": item.get("title", "No Title"),
-                    "summary": item.get("summary", item.get("title", "")),
-                    "source": item.get("publisher", "Yahoo Finance"),
-                    "url": item.get("link", ""),
+                    "headline": title,
+                    "summary": summary,
+                    "source": publisher,
+                    "url": link,
                     "published_date": pub_time,
                     "ticker": symbol
                 })

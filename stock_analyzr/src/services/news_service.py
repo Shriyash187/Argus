@@ -45,6 +45,23 @@ class NewsService:
         self.db = db_service
         self.yahoo = yahoo_service
         self.news_api_key = news_api_key
+        self.finbert_pipeline = None
+        self._init_finbert()
+
+    def _init_finbert(self):
+        """Try loading HuggingFace FinBERT pipeline (optional)."""
+        try:
+            from transformers import pipeline
+            logger.info("Attempting to load FinBERT (yiyanghkust/finbert-tone)...")
+            self.finbert_pipeline = pipeline(
+                "sentiment-analysis",
+                model="yiyanghkust/finbert-tone",
+                tokenizer="yiyanghkust/finbert-tone"
+            )
+            logger.info("FinBERT model loaded successfully.")
+        except Exception as e:
+            logger.warning(f"Failed to load FinBERT (falling back to lexicon-based sentiment): {e}")
+            self.finbert_pipeline = None
 
     def fetch_and_process_news(self, ticker: str) -> List[Dict[str, Any]]:
         """
@@ -103,7 +120,7 @@ class NewsService:
 
     def analyze_sentiment(self, text: str) -> Tuple[float, float]:
         """
-        Lexicon-based financial sentiment analyzer.
+        Sentiment analyzer. Uses HF FinBERT if available; otherwise falls back to lexicon-based method.
         Calculates a score between -1.0 (extremely negative) and 1.0 (extremely positive).
         
         Args:
@@ -112,6 +129,29 @@ class NewsService:
         Returns:
             Tuple of (sentiment_score, confidence_score)
         """
+        # If FinBERT is available, try to use it
+        if self.finbert_pipeline is not None:
+            try:
+                # Truncate text to avoid model index errors (max 512 tokens)
+                truncated_text = text[:500]
+                res = self.finbert_pipeline(truncated_text)
+                if res:
+                    label = res[0]['label']       # e.g., 'Positive', 'Negative', 'Neutral'
+                    score = res[0]['score']       # confidence score from the model [0.0, 1.0]
+                    
+                    # Convert to continuous value [-1.0, 1.0]
+                    if label == 'Positive':
+                        sent_score = score
+                    elif label == 'Negative':
+                        sent_score = -score
+                    else: # Neutral
+                        sent_score = 0.0
+                        
+                    return round(sent_score, 2), round(score, 2)
+            except Exception as e:
+                logger.warning(f"Error during FinBERT sentiment inference: {e}. Falling back to lexicon analysis.")
+                
+        # Lexicon fallback
         words = re.findall(r'\b[a-z]+\b', text.lower())
         pos_count = sum(1 for w in words if w in POSITIVE_WORDS)
         neg_count = sum(1 for w in words if w in NEGATIVE_WORDS)

@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+    environment:
+      - ALPHA_VANTAGE_API_KEY=GQ1C7TJRZ4ANOZM9
+      - NEWS_API_KEY=
+    restart: always
+
+  streamlit:
+    build: .
+    command: streamlit run stock_analyzr/src/app.py --server.port 8501 --server.address 0.0.0.0
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+    environment:
+      - ALPHA_VANTAGE_API_KEY=GQ1C7TJRZ4ANOZM9
+      - NEWS_API_KEY=
+    depends_on:
+      - api
+    restart: always
