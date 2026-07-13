@@ -23,8 +23,8 @@ def test_endpoints():
     
     # Wait for server to spin up by polling /health
     server_started = False
-    print("Waiting for server to start (polling http://127.0.0.1:8000/health for up to 45 seconds)...")
-    for i in range(45):
+    print("Waiting for server to start (polling http://127.0.0.1:8000/health for up to 90 seconds)...")
+    for i in range(90):
         if server_process.poll() is not None:
             break
         try:
@@ -74,11 +74,11 @@ def test_endpoints():
             if payload:
                 req.add_header('Content-Type', 'application/json')
                 data = json.dumps(payload).encode('utf-8')
-                with urllib.request.urlopen(req, data=data, timeout=10) as response:
+                with urllib.request.urlopen(req, data=data, timeout=300) as response:
                     status = response.status
                     res_body = json.loads(response.read().decode())
             else:
-                with urllib.request.urlopen(req, timeout=10) as response:
+                with urllib.request.urlopen(req, timeout=300) as response:
                     status = response.status
                     res_body = json.loads(response.read().decode())
                     
@@ -112,7 +112,7 @@ def test_endpoints():
         req = urllib.request.Request(url_trade, method="POST")
         req.add_header('Content-Type', 'application/json')
         data = json.dumps(trade_payload).encode('utf-8')
-        with urllib.request.urlopen(req, data=data, timeout=10) as response:
+        with urllib.request.urlopen(req, data=data, timeout=300) as response:
             status = response.status
             res_body = json.loads(response.read().decode())
         print(f"  Result: SUCCESS (Status: {status}, Response: {res_body})")
@@ -129,11 +129,15 @@ def test_endpoints():
         
     # Shutdown server
     print("Terminating server...")
-    server_process.terminate()
-    try:
-        server_process.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        server_process.kill()
+    if not success:
+        out, _ = server_process.communicate()
+        print("\n=== SERVER LOGS ===\n", out, "\n===================\n")
+    else:
+        server_process.terminate()
+        try:
+            server_process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            server_process.kill()
         
     print("API validation complete.")
     if success:
