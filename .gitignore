@@ -1,35 +1,44 @@
 # Virtual Environment
 venv/
-
-# Python
-__pycache__/
-*.py[cod]
-*.pyo
-
-# IDE
-.vscode/
-.idea/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Environment Variables
 .env
 .env.*
 
-# Runtime Logs
-*.log
-data/system_logs.log
-
-# Streamlit
-.streamlit/secrets.toml
-
-# Cache
+# Python caches and compiled files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
 .cache/
 
-# TensorFlow checkpoints
-checkpoints/
+# IDE files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
 
-# Jupyter
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Logs and databases
+*.log
+data/*.log
+data/*.db
+data/*.csv
+data/*.json
+!data/.gitkeep
+
+# Models and scalars
+models/*
+!models/.gitkeep
+
+# Streamlit config/secrets
+.streamlit/secrets.toml
+
+# Checkpoints and Jupyter notebook caches
+checkpoints/
 .ipynb_checkpoints/
