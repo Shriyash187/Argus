@@ -1,6 +1,6 @@
-# Market Intelligence & Investment Decision Engine (M.I.D.E.)
+# ARGUS Intelligent Market Analytics Platform
 
-M.I.D.E. is a decision-support platform that integrates historical price data, technical analysis, news sentiment mining, and machine learning forecasts to assist in stock trading. Built as a decoupled multi-service system, the project serves a dual purpose: providing production-ready financial pipelines (using FastAPI, SQLAlchemy, and TensorFlow) alongside explicit implementations of custom data structures (sliding queues, pattern stacks, heaps) for academic demonstration.
+ARGUS is a decision-support platform that integrates historical price data, technical analysis, news sentiment mining, and machine learning forecasts to assist in stock trading. Built as a decoupled multi-service system, the project serves a dual purpose: providing production-ready financial pipelines (using FastAPI, SQLAlchemy, and TensorFlow) alongside explicit implementations of custom data structures (sliding queues, pattern stacks, heaps) for academic demonstration.
 
 The platform provides a graphical interface built in Streamlit for visualizing historical price feeds, training predictive regressors, simulating paper trading, backtesting rule-based strategies, and generating investment advisory memos.
 
@@ -13,7 +13,7 @@ Active retail traders face a fragmentation of information when compiling an inve
 * **Rate Limits and API Lockouts**: Automated systems frequently trigger provider rate limits (such as yfinance or Alpha Vantage thresholds) without dynamic queues or caching frameworks.
 * **Opaque ML Forecasts**: Traditional model predictions output raw numbers without contextual risk estimation, sentiment integration, or explainable feature attribution.
 
-M.I.D.E. addresses these challenges by decoupling the data acquisition, persistence, and machine learning layers, ensuring that data is cached locally, sequences are constructed without leakage, and predictions are backed by multi-signal rules and explainability tools.
+ARGUS addresses these challenges by decoupling the data acquisition, persistence, and machine learning layers, ensuring that data is cached locally, sequences are constructed without leakage, and predictions are backed by multi-signal rules and explainability tools.
 
 ---
 
@@ -39,7 +39,7 @@ The system automatically compiles performance metrics and saves diagnostic plots
 
 ## 4. Architecture Overview
 
-M.I.D.E. is structured as a decoupled, multi-tier system:
+ARGUS is structured as a decoupled, multi-tier system:
 
 ```mermaid
 graph TD
@@ -386,10 +386,10 @@ flowchart TD
 ```
 
 ### Sequence Creation
-LSTMs require input tensors of shape `(samples, sequence_length, features)`. Standard sliding window loops can be memory intensive on large arrays. M.I.D.E. provides a `SlidingWindowQueue` wrapping `collections.deque` with a fixed capacity. As data points stream in, the queue maintains the window at O(1) complexity, outputting features and next-day close targets without nesting index loops.
+LSTMs require input tensors of shape `(samples, sequence_length, features)`. Standard sliding window loops can be memory intensive on large arrays. ARGUS provides a `SlidingWindowQueue` wrapping `collections.deque` with a fixed capacity. As data points stream in, the queue maintains the window at O(1) complexity, outputting features and next-day close targets without nesting index loops.
 
 ### Scale Isolation (Data Leakage Prevention)
-To ensure validation results match live trading conditions, M.I.D.E. enforces strict temporal checks:
+To ensure validation results match live trading conditions, ARGUS enforces strict temporal checks:
 * **No Random Splits**: Splitting is done sequentially based on time (e.g., 70% Train, 15% Validation, 15% Test). Random cross-validation is blocked since shuffling leaks forward information.
 * **Fitted Parameter Isolation**: Preprocessing parameters (such as MinMaxScaler minimums and maximums) are computed *only* on the training fold. The resulting boundaries are then applied to validate test folds. Scaling is fit and applied within each cross-validation window in `backtest.py` to prevent data leakage.
 * **Inference Guard**: The `prepare_inference_data` method uses pre-fitted parameters stored in the model registry to process live data, verifying that the scaling bounds remain unmodified.
@@ -594,7 +594,7 @@ export NEWS_API_KEY="your_api_key"
 export GEMINI_API_KEY="your_api_key"
 ```
 
-*Note: If no keys are set, M.I.D.E. runs on Yahoo Finance prices, falls back to lexicon-based sentiment analysis, and uses local templates for advisor memos.*
+*Note: If no keys are set, ARGUS runs on Yahoo Finance prices, falls back to lexicon-based sentiment analysis, and uses local templates for advisor memos.*
 
 ---
 

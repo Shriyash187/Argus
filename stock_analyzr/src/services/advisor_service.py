@@ -123,7 +123,7 @@ class InvestmentAdvisorService:
             "HOLD": "indicates a neutral position. The asset is trading close to fair value, with positive and negative catalysts balancing out."
         }
         
-        memo = f"""# M.I.D.E. Investment Advisor Memo
+        memo = f"""# ARGUS Investment Advisor Memo
 **Confidential | Prepared for Internal Portfolio Manager Review**
 
 ## Metadata Summary
@@ -138,7 +138,7 @@ class InvestmentAdvisorService:
 ---
 
 ## 1. Executive Summary & Investment Thesis
-On the date of {date}, the Market Intelligence & Investment Decision Engine (M.I.D.E.) platform evaluated {ticker} and issued a **{action}** recommendation. 
+On the date of {date}, the ARGUS Intelligent Market Analytics Platform evaluated {ticker} and issued a **{action}** recommendation. 
 
 This assessment is backed by a {confidence * 100:.0f}% confidence rating, indicating high model consensus. The thesis {action_verbs[action]} Over the specified horizon of {horizon}, we project an expected return of approximately {expected_return * 100:+.2f}%, adjusting for underlying asset volatility.
 

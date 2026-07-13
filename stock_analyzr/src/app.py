@@ -1,5 +1,5 @@
 """
-M.I.D.E. (Market Intelligence & Investment Decision Engine) Streamlit Dashboard
+ARGUS Intelligent Market Analytics Platform Streamlit Dashboard
 Modernized multi-page production interface with data-service layers.
 """
 
@@ -35,7 +35,7 @@ logger = get_logger()
 
 # ----------------- SESSION STATE & SETUP -----------------
 st.set_page_config(
-    page_title="M.I.D.E. Platform",
+    page_title="ARGUS Platform",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -249,8 +249,8 @@ if not watched_companies:
     watched_companies = db.list_companies()
 
 # ----------------- SIDEBAR PAGE SELECTOR -----------------
-st.sidebar.markdown("<div style='font-size: 1.15rem; font-weight: 700; color: #f0f6fc; margin-bottom: 0.25rem; letter-spacing: -0.02em;'>M.I.D.E. Terminal</div>", unsafe_allow_html=True)
-st.sidebar.markdown("<div style='color: #8b949e; font-size: 0.65rem; margin-bottom: 1.25rem; text-transform: uppercase; letter-spacing: 0.05em;'>Investment Decision Engine</div>", unsafe_allow_html=True)
+st.sidebar.markdown("<div style='font-size: 1.15rem; font-weight: 700; color: #f0f6fc; margin-bottom: 0.25rem; letter-spacing: -0.02em;'>ARGUS Terminal</div>", unsafe_allow_html=True)
+st.sidebar.markdown("<div style='color: #8b949e; font-size: 0.65rem; margin-bottom: 1.25rem; text-transform: uppercase; letter-spacing: 0.05em;'>Intelligent Market Analytics Platform</div>", unsafe_allow_html=True)
 
 page = st.sidebar.radio(
     "Navigation",
@@ -397,7 +397,7 @@ def load_stock_data(ticker: str) -> pd.DataFrame:
 
 # ----------------- PAGE 1: DASHBOARD -----------------
 if page == "Dashboard":
-    st.markdown('<h1 class="main-header">Market Intelligence Dashboard</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">ARGUS Analytics Dashboard</h1>', unsafe_allow_html=True)
     st.markdown('<p class="sub-header">System status, watchlists, and algorithmic rankings.</p>', unsafe_allow_html=True)
     
     # 1. Display Overview Metrics
@@ -1301,7 +1301,7 @@ elif page == "Recommendation & Backtest":
                 df_hist = pd.DataFrame(res["portfolio_value_history"])
                 fig_hist = make_subplots(specs=[[{"secondary_y": True}]])
                 fig_hist.add_trace(
-                    go.Scatter(x=df_hist["date"], y=df_hist["value"], name="MIDE Strategy ($)", line=dict(color="#22C55E", width=2)),
+                    go.Scatter(x=df_hist["date"], y=df_hist["value"], name="ARGUS Strategy ($)", line=dict(color="#22C55E", width=2)),
                     secondary_y=False
                 )
                 fig_hist.add_trace(
@@ -1338,7 +1338,7 @@ elif page == "AI Advisor Memo":
     
     if selected_ticker:
         if st.button("Compile Investment Advisor Memo"):
-            with st.spinner("Synthesizing market intelligence data..."):
+            with st.spinner("Synthesizing ARGUS intelligence data..."):
                 memo = advisor_service.generate_investment_memo(selected_ticker, gemini_api_key=st.session_state.gemini_key)
                 
             st.markdown("### Generated Memo Preview")

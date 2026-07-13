@@ -19,8 +19,8 @@ from models.model_selector import ModelSelector
 from preprocess import DataPreprocessor
 
 app = FastAPI(
-    title="M.I.D.E. Platform API",
-    description="Market Intelligence & Investment Decision Engine Backend",
+    title="ARGUS Platform API",
+    description="ARGUS Intelligent Market Analytics Platform Backend",
     version="1.0.0"
 )
 
